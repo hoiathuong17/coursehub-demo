@@ -20,7 +20,7 @@ enrollments = [
 {"student_id": "22000001", "course_code": "INT2204"}
 ]
 
-"""for course in courses:
+for course in courses:
     remaining = course["capacity"] - course["enrolled"]
     print(course["code"], "- con", remaining, "cho")
 
@@ -31,8 +31,14 @@ def find_course(course_code):
     return None
 print(find_course("INT2204"))
 
+def find_student(student_id):
+    for student in students:
+        if student["id"] == student_id:
+            return student
+    return None
+
 def can_enroll(student_id, course_code):
-    
+
     course = find_course(course_code)
     if course is None:
         return False, "Hoc phan khong ton tai"
@@ -51,7 +57,7 @@ try:
     print(courses[:limit])
 except ValueError:
     print("So luong phai la so nguyen")
-"""
+
 def search_courses(keyword):
     normalized = keyword.strip().lower()
     results = []
@@ -62,3 +68,12 @@ def search_courses(keyword):
             results.append(course)
         return results
 print(search_courses("web"))
+
+def enroll_student(student_id, course_code):
+    """Kiểm tra học phần tồn tại"""
+    course = find_course(course_code)
+    if course is None:
+        return False, "Hoc phan khong ton tai"
+    student = find_student(student_id)
+    if student is None:
+        return False, "Sinh vien khong ton tai"
