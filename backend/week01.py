@@ -29,7 +29,7 @@ def find_course(course_code):
         if course["code"] == course_code:
             return course
     return None
-print(find_course("INT2204"))
+
 
 def find_student(student_id):
     for student in students:
@@ -51,13 +51,13 @@ def can_enroll(student_id, course_code):
     if duplicated:
         return False, "Sinh vien da dang ky hoc phan nay"
     return True, "Co the dang ky"
-print(can_enroll("22000002", "INT2204"))
-try:
+
+"""try:
     limit = int(input("Nhap so luong hoc phan muon hien thi: "))
     print(courses[:limit])
 except ValueError:
     print("So luong phai la so nguyen")
-
+"""
 def search_courses(keyword):
     normalized = keyword.strip().lower()
     results = []
@@ -67,13 +67,42 @@ def search_courses(keyword):
         if normalized in code or normalized in name:
             results.append(course)
         return results
-print(search_courses("web"))
 
+# Ham dang ki tin
 def enroll_student(student_id, course_code):
-    """Kiểm tra học phần tồn tại"""
+
+    # Kiểm tra học phần tồn tại hay không 
     course = find_course(course_code)
     if course is None:
-        return False, "Hoc phan khong ton tai"
+        return course_code, "Hoc phan khong ton tai"
+
+    # Kiểm tra mã sinh viên có tồn tại hay không 
     student = find_student(student_id)
     if student is None:
-        return False, "Sinh vien khong ton tai"
+        return student_id,"Sinh vien khong ton tai"
+
+    # Kiểm tra lớp còn chỗ hay không
+    if course.get('capacity') == course.get('enrolled'):
+        return "Lop hoc da het cho"
+
+    # Kiểm tra sinh viên đăng kí trùng
+    for enroll in enrollments:
+        if enroll.get('student_id') == student_id and enroll.get('course_code') == course_code:
+            return "Sinh vien dang ki trung"
+
+    new_enroll = {"student_id": student_id , "course_code": course_code}
+    enrollments.append(new_enroll)
+    return("dang ki thanh cong")
+# Kiểm thử
+# sinh vien ko ton tai
+print(enroll_student('22000003','INT2204'))
+# ma lop khong ton tai
+print(enroll_student('22000001','INT2207'))
+# het cho
+print(enroll_student('22000001','INT2205'))
+# sinh dang ki trung
+print(enroll_student('22000001','INT2204'))
+# dang ki thanh cong
+print(enroll_student('22000002','INT2204'))
+
+
