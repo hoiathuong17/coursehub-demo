@@ -1,4 +1,0 @@
-$kind: collection
-description: Bo suu tap API kiem thu CourseHub Buoi 3 day du (FastAPI + PostgreSQL) bao gom ca cac bai tap tu thuc hanh
-variables:
-  base_url: ""
