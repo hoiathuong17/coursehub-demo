@@ -1,4 +1,22 @@
 $kind: http-request
 url: "{{base_url}}/courses/INT2204"
 method: GET
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status code la 200\", () => {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      pm.test(\"Dung thong tin INT2204\", () => {\r
+
+      \    const data = pm.response.json();\r
+
+      \    pm.expect(data.code).to.eql(\"INT2204\");\r
+
+      \    pm.expect(data.credits).to.eql(3);\r
+
+      });"
+    language: text/javascript
 order: 4000

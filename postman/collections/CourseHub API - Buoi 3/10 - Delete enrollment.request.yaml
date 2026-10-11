@@ -1,4 +1,12 @@
 $kind: http-request
 url: "{{base_url}}/enrollments/22000004/WEB-01"
 method: DELETE
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status code la 204\", () => {\r
+
+      \    pm.response.to.have.status(204);\r
+
+      });"
+    language: text/javascript
 order: 8000

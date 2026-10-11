@@ -12,3 +12,10 @@ class EnrollmentCreate(BaseModel):
         examples=["WEB-01"],
     )
 
+class SectionCapacityUpdate(BaseModel):
+    capacity: int = Field(
+        ...,
+        gt=0,
+        description="Suc chua phai la so nguyen lon hon 0",
+        examples=[4],
+    )
