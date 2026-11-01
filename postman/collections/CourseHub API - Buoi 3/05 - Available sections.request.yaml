@@ -3,4 +3,20 @@ url: "{{base_url}}/sections?available_only=true"
 method: GET
 queryParams:
   available_only: "true"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status code la 200\", () => {\r
+
+      \    pm.response.to.have.status(200);\r
+
+      });\r
+
+      pm.test(\"Cac lop tra ve deu con cho\", () => {\r
+
+      \    const data = pm.response.json();\r
+
+      \    data.forEach(s => pm.expect(s.remaining).to.be.above(0));\r
+
+      });"
+    language: text/javascript
 order: 5000
