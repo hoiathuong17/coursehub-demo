@@ -3,3 +3,8 @@ __pycache__/
 .venv/
 backend/.env
 .postman/
+postman/collections/CourseHub API - Buoi 4/02 - Enrollment events empty.request.yaml
+postman/collections/CourseHub API - Buoi 4/01 - Enrollment events with data.request.yaml
+postman/collections/CourseHub API - Buoi 4/03 - Demo Rollback failure.request.yaml
+postman/collections/CourseHub API - Buoi 4/04 - Verify Rollback unaffected.request.yaml
+postman/collections/CourseHub API - Buoi 4/.resources/definition.yaml
