@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{base_url}}/lecturers"
+method: GET
+order: 9000

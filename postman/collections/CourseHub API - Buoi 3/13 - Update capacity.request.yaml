@@ -1,0 +1,7 @@
+$kind: http-request
+url: "{{base_url}}/sections/WEB-01/capacity"
+method: PATCH
+body:
+  type: json
+  content: "{\r\n\"capacity\": 4\r\n}"
+order: 11000
