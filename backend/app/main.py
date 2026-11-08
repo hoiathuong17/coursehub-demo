@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError,SQLAlchemyError
 from .database import engine
@@ -14,6 +15,23 @@ title="CourseHub API",
 version="0.3.0",
 description="API thuc hanh Buoi 3 - Co so du lieu Web va he thong thong tin",
 )
+app.add_middleware(
+CORSMiddleware,
+allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+allow_credentials=False,
+allow_methods=["GET", "POST", "DELETE"],
+allow_headers=["Content-Type"],
+)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.exception("Unhandled server exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Lỗi máy chủ nội bộ: {str(exc)}"},
+    )
+
 # ==========================================
 # BUỔI 4 - BÀI 1: API đọc lịch sử đăng ký
 # ==========================================
@@ -408,6 +426,7 @@ def create_enrollment(payload: EnrollmentCreate) -> dict[str, str]:
 
     try:
         with engine.begin() as connection:
+            connection.execute(text("SET LOCAL lock_timeout = '3s'"))
             student = connection.execute(
                 text(student_sql),
                 {"student_id": payload.student_id},
@@ -455,10 +474,18 @@ def create_enrollment(payload: EnrollmentCreate) -> dict[str, str]:
             connection.execute(text(insert_sql), parameters)
             connection.execute(text(event_sql), parameters)
 
+    except HTTPException:
+        raise
     except IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Dang ky xung dot voi du lieu hien tai",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Loi khi dang ky hoc phan")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Loi xu ly dang ky: {str(exc)}",
         ) from exc
 
     return {
@@ -500,30 +527,40 @@ def delete_enrollment(
         "class_section_id": class_section_id,
     }
 
-    with engine.begin() as connection:
-        section = connection.execute(
-            text(lock_section_sql),
-            {"class_section_id": class_section_id},
-        ).first()
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("SET LOCAL lock_timeout = '3s'"))
+            section = connection.execute(
+                text(lock_section_sql),
+                {"class_section_id": class_section_id},
+            ).first()
 
-        if section is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Khong tim thay lop hoc phan",
-            )
+            if section is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Khong tim thay lop hoc phan",
+                )
 
-        deleted = connection.execute(
-            text(delete_sql),
-            parameters,
-        ).first()
+            deleted = connection.execute(
+                text(delete_sql),
+                parameters,
+            ).first()
 
-        if deleted is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Khong tim thay dang ky can huy",
-            )
+            if deleted is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Khong tim thay dang ky can huy",
+                )
 
-        connection.execute(text(event_sql), parameters)
+            connection.execute(text(event_sql), parameters)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Loi khi huy dang ky hoc phan")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Loi xu ly huy dang ky: {str(exc)}",
+        ) from exc
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

@@ -8,3 +8,40 @@ postman/collections/CourseHub API - Buoi 4/01 - Enrollment events with data.requ
 postman/collections/CourseHub API - Buoi 4/03 - Demo Rollback failure.request.yaml
 postman/collections/CourseHub API - Buoi 4/04 - Verify Rollback unaffected.request.yaml
 postman/collections/CourseHub API - Buoi 4/.resources/definition.yaml
+.env
+.env.local
+node_modules/
+dist/
+my-react-app/.gitignore
+my-react-app/eslint.config.js
+my-react-app/index.html
+my-react-app/package-lock.json
+my-react-app/package.json
+my-react-app/README.md
+my-react-app/vite.config.js
+my-react-app/public/favicon.svg
+my-react-app/public/icons.svg
+my-react-app/src/App.css
+my-react-app/src/App.jsx
+my-react-app/src/index.css
+my-react-app/src/main.jsx
+my-react-app/src/assets/hero.png
+my-react-app/src/assets/react.svg
+my-react-app/src/assets/vite.svg
+my-react-app/.gitignore
+my-react-app/eslint.config.js
+my-react-app/index.html
+my-react-app/package-lock.json
+my-react-app/package.json
+my-react-app/README.md
+my-react-app/vite.config.js
+my-react-app/public/favicon.svg
+my-react-app/public/icons.svg
+my-react-app/src/App.css
+my-react-app/src/App.jsx
+my-react-app/src/index.css
+my-react-app/src/main.jsx
+my-react-app/src/assets/hero.png
+my-react-app/src/assets/react.svg
+my-react-app/src/assets/vite.svg
+frontend/package-lock.json
