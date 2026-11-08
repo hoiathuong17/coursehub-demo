@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError,SQLAlchemyError
 from .database import engine
 from .schemas import DemoEnrollmentCreate, EnrollmentCreate, SectionCapacityUpdate
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
