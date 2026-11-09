@@ -42,7 +42,7 @@ def list_enrollment_events(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[dict[str, object]]:
-    conditions: list[str] = []
+    conditions: list[str] = ["dataset = 'demo'"]
     parameters: dict[str, object] = {
         "limit": limit,
         "skip": skip,
@@ -136,17 +136,58 @@ def get_course(course_code: str) -> dict[str, object]:
 
 @app.get("/sections")
 def list_sections(
-    available_only: bool = False,
+    q: str | None = Query(
+        default=None,
+        max_length=100,
+        description="Từ khóa không quá 100 ký tự; tìm không phân biệt hoa thường trong mã lớp, mã học phần hoặc tên học phần.",
+    ),
+    course_code: str | None = Query(
+        default=None,
+        max_length=20,
+        description="Lọc chính xác theo mã học phần.",
+    ),
+    available_only: bool = Query(
+        default=False,
+        description="Chỉ trả về lớp còn chỗ nếu đặt true.",
+    ),
+    skip: int = Query(default=0, ge=0, description="Số dòng bỏ qua."),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Số dòng tối đa mỗi trang (1–100).",
+    ),
 ) -> list[dict[str, object]]:
-    sql = """
-        SELECT class_id, course_code, capacity, enrolled, remaining
-        FROM v_section_summary
+    """Search and paginate sections in the database.
+
+    Results use the stable order class_id ASC. Filtering, offset, and limit are
+    applied by SQL before rows are returned.
     """
+    sql = """
+        SELECT s.class_id, s.course_code, c.name AS course_name,
+               s.capacity, s.enrolled, s.remaining
+        FROM v_section_summary AS s
+        JOIN courses AS c ON c.code = s.course_code
+    """
+    conditions: list[str] = []
+    parameters: dict[str, object] = {"skip": skip, "limit": limit}
+    if q is not None and q.strip():
+        conditions.append(
+            "(LOWER(s.class_id) LIKE :keyword "
+            "OR LOWER(s.course_code) LIKE :keyword "
+            "OR LOWER(c.name) LIKE :keyword)"
+        )
+        parameters["keyword"] = f"%{q.strip().lower()}%"
+    if course_code is not None and course_code.strip():
+        conditions.append("s.course_code = :course_code")
+        parameters["course_code"] = course_code.strip().upper()
     if available_only:
-        sql += " WHERE remaining > 0"
-    sql += " ORDER BY class_id"
+        conditions.append("s.remaining > 0")
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += " ORDER BY s.class_id ASC LIMIT :limit OFFSET :skip"
     with engine.connect() as connection:
-        rows = connection.execute(text(sql)).mappings().all()
+        rows = connection.execute(text(sql), parameters).mappings().all()
     return [dict(row) for row in rows]
 
 @app.get("/students/{student_id}/enrollments")
@@ -288,7 +329,7 @@ def list_enrollment_events(
     skip: int = Query(default=0, ge=0, description="Số bản ghi bỏ qua"),
     limit: int = Query(default=20, ge=1, le=100, description="Giới hạn số bản ghi từ 1 đến 100"),
 ) -> list[dict[str, object]]:
-    conditions: list[str] = []
+    conditions: list[str] = ["dataset = 'demo'"]
     parameters: dict[str, object] = {"skip": skip, "limit": limit}
 
     if student_id is not None:
@@ -575,7 +616,7 @@ def list_enrollment_events(
     skip: int = Query(default=0, ge=0, description="Số bản ghi bỏ qua"),
     limit: int = Query(default=20, ge=1, le=100, description="Giới hạn số bản ghi từ 1 đến 100"),
 ) -> list[dict[str, object]]:
-    conditions: list[str] = []
+    conditions: list[str] = ["dataset = 'demo'"]
     parameters: dict[str, object] = {"skip": skip, "limit": limit}
 
     if student_id is not None:

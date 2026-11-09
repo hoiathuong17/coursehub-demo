@@ -145,6 +145,18 @@ button:disabled {
     margin-bottom: 16px;
 }
 
+.history-pagination {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.error {
+    color: #a12622;
+}
+
 .filters>label:first-child {
     width: 100%;
     font-size: 13px;

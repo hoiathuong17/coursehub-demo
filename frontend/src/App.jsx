@@ -3,13 +3,29 @@ import { api } from "./api.js";
 import Notice from "./components/Notice.jsx";
 import SectionTable from "./components/SectionTable.jsx";
 import EnrollmentList from "./components/EnrollmentList.jsx";
+import StudentForm from "./components/StudentForm.jsx";
+import EnrollmentHistory from "./components/EnrollmentHistory.jsx";
+
+const HISTORY_PAGE_SIZE = 20;
+const SECTION_PAGE_SIZE = 20;
+
 export default function App() {
     const [draftId, setDraftId] = useState("22000004");
     const [studentId, setStudentId] = useState("22000004");
     const [courses, setCourses] = useState([]);
     const [sections, setSections] = useState([]);
+    const [sectionPage, setSectionPage] = useState(0);
+    const [sectionHasNext, setSectionHasNext] = useState(false);
+    const [sectionsLoading, setSectionsLoading] = useState(true);
+    const [sectionsError, setSectionsError] = useState("");
     const [enrollments, setEnrollments] = useState([]);
+    const [historyRows, setHistoryRows] = useState([]);
+    const [historyPage, setHistoryPage] = useState(0);
+    const [historyHasNext, setHistoryHasNext] = useState(false);
+    const [historyLoading, setHistoryLoading] = useState(true);
+    const [historyError, setHistoryError] = useState("");
     const [search, setSearch] = useState("");
+    const [courseCode, setCourseCode] = useState("");
     const [onlyAvailable, setOnlyAvailable] = useState(false);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -23,21 +39,18 @@ export default function App() {
             setLoading(true);
             setError("");
             try {
-                const [courseData, sectionData, enrollmentData] = await Promise.all([
+                const [courseData, enrollmentData] = await Promise.all([
                     api("/courses", options),
-                    api("/sections", options),
                     api(`/students/${encodeURIComponent(studentId)}/enrollments`,
                         options),
                 ]);
                 if (controller.signal.aborted) return;
                 setCourses(courseData);
-                setSections(sectionData);
                 setEnrollments(enrollmentData);
             } catch (err) {
                 if (controller.signal.aborted) return;
                 setError(err.message);
                 setCourses([]);
-                setSections([]);
                 setEnrollments([]);
             } finally {
                 if (!controller.signal.aborted) setLoading(false);
@@ -46,6 +59,72 @@ export default function App() {
         loadData();
         return () => controller.abort();
     }, [studentId, refresh]);
+    useEffect(() => {
+        const controller = new AbortController();
+        const params = new URLSearchParams({
+            limit: String(SECTION_PAGE_SIZE + 1),
+            skip: String(sectionPage * SECTION_PAGE_SIZE),
+            available_only: String(onlyAvailable),
+        });
+        if (search.trim()) params.set("q", search.trim());
+        if (courseCode) params.set("course_code", courseCode);
+        async function loadSections() {
+            setSectionsLoading(true);
+            setSectionsError("");
+            try {
+                const data = await api(`/sections?${params}`, {
+                    signal: controller.signal,
+                });
+                if (controller.signal.aborted) return;
+                if (!Array.isArray(data)) {
+                    throw new Error("API danh sách lớp trả về dữ liệu không hợp lệ.");
+                }
+                setSections(data.slice(0, SECTION_PAGE_SIZE));
+                setSectionHasNext(data.length > SECTION_PAGE_SIZE);
+            } catch (err) {
+                if (controller.signal.aborted) return;
+                setSectionsError(err.message);
+                setSections([]);
+                setSectionHasNext(false);
+            } finally {
+                if (!controller.signal.aborted) setSectionsLoading(false);
+            }
+        }
+        loadSections();
+        return () => controller.abort();
+    }, [search, courseCode, onlyAvailable, sectionPage, refresh]);
+    useEffect(() => {
+        const controller = new AbortController();
+        async function loadHistory() {
+            setHistoryLoading(true);
+            setHistoryError("");
+            const params = new URLSearchParams({
+                student_id: studentId,
+                limit: String(HISTORY_PAGE_SIZE + 1),
+                skip: String(historyPage * HISTORY_PAGE_SIZE),
+            });
+            try {
+                const events = await api(`/enrollment-events?${params}`, {
+                    signal: controller.signal,
+                });
+                if (controller.signal.aborted) return;
+                if (!Array.isArray(events)) {
+                    throw new Error("API lịch sử trả về dữ liệu không hợp lệ.");
+                }
+                setHistoryRows(events.slice(0, HISTORY_PAGE_SIZE));
+                setHistoryHasNext(events.length > HISTORY_PAGE_SIZE);
+            } catch (err) {
+                if (controller.signal.aborted) return;
+                setHistoryError(err.message);
+                setHistoryRows([]);
+                setHistoryHasNext(false);
+            } finally {
+                if (!controller.signal.aborted) setHistoryLoading(false);
+            }
+        }
+        loadHistory();
+        return () => controller.abort();
+    }, [studentId, historyPage, refresh]);
     function chooseStudent(event) {
         event.preventDefault();
         const nextId = draftId.trim();
@@ -55,6 +134,7 @@ export default function App() {
         }
         setNotice({ kind: "info", text: "" });
         setLoading(true);
+        setHistoryPage(0);
         setStudentId(nextId);
         setRefresh((value) => value + 1);
     }
@@ -90,19 +170,14 @@ export default function App() {
             setBusy(false);
         }
     }
-    const keyword = search.trim().toLowerCase();
     const rows = sections.map((section) => ({
         ...section,
-        course_name: courses.find((course) => course.code ===
-            section.course_code)?.name
-            ?? section.course_code,
         registered: enrollments.some((item) => item.class_section_id ===
             section.class_id),
-    })).filter((row) => (
-        `${row.class_id} ${row.course_code}
-${row.course_name}`.toLowerCase().includes(keyword)
-        && (!onlyAvailable || row.remaining > 0)
-    ));
+    }));
+    const filterableCourses = courses.filter((course) =>
+        ["INT2204", "INT2205", "INT2206"].includes(course.code)
+    );
     const disabled = loading || busy || Boolean(error);
     return (
         <main className="container">
@@ -118,16 +193,12 @@ ${row.course_name}`.toLowerCase().includes(keyword)
             </p>
             <section className="panel">
                 <h2>1. Chọn sinh viên</h2>
-                <form className="student-form" onSubmit={chooseStudent}>
-                    <label htmlFor="student-id">Mã sinh viên</label>
-                    <input id="student-id" value={draftId} maxLength={8} required
-                        inputMode="numeric" onChange={(e) => setDraftId(e.target.value)}
-                        disabled={busy} />
-                    <button type="submit" disabled={busy}>Xem đăng ký</button>
-                    <button type="button" className="secondary" disabled={busy || loading}
-                        onClick={() => setRefresh((value) => value + 1)}>Tải lại dữ
-                        liệu</button>
-                </form>
+                <StudentForm value={draftId}
+                    onChange={setDraftId}
+                    onSubmit={chooseStudent}
+                    onRefresh={() => setRefresh((value) => value + 1)}
+                    disabled={busy}
+                    loading={loading} />
                 <p className="muted">Dữ liệu đang xem: <strong>{studentId}</strong>.
                     Mã mẫu: 22000001–22000004.</p>
             </section>
@@ -141,15 +212,55 @@ ${row.course_name}`.toLowerCase().includes(keyword)
                         <div className="filters">
                             <label htmlFor="search">Tìm lớp / học phần</label>
                             <input id="search" value={search} placeholder="Ví dụ: web"
-                                onChange={(e) => setSearch(e.target.value)} />
+                                onChange={(e) => {
+                                    setSearch(e.target.value);
+                                    setSectionPage(0);
+                                }} />
+                            <label htmlFor="course-code">Mã học phần</label>
+                            <select id="course-code" value={courseCode}
+                                onChange={(e) => {
+                                    setCourseCode(e.target.value);
+                                    setSectionPage(0);
+                                }}>
+                                <option value="">Tất cả học phần</option>
+                                {filterableCourses.map((course) => (
+                                    <option key={course.code} value={course.code}>
+                                        {course.code}
+                                    </option>
+                                ))}
+                            </select>
                             <label className="check">
                                 <input type="checkbox" checked={onlyAvailable}
-                                    onChange={(e) => setOnlyAvailable(e.target.checked)} />
+                                    onChange={(e) => {
+                                        setOnlyAvailable(e.target.checked);
+                                        setSectionPage(0);
+                                    }} />
                                 Chỉ hiện lớp còn chỗ
                             </label>
                         </div>
-                        <SectionTable rows={rows} disabled={disabled}
-                            onEnroll={(id) => changeEnrollment(id)} />
+                        {sectionsError && <p role="alert" className="error">{sectionsError}</p>}
+                        {sectionsLoading
+                            ? <p role="status">Đang tải danh sách lớp...</p>
+                            : !sectionsError && (
+                                <>
+                                    <SectionTable rows={rows} disabled={disabled}
+                                        onEnroll={(id) => changeEnrollment(id)} />
+                                    <nav className="history-pagination"
+                                        aria-label="Phân trang danh sách lớp">
+                                        <button type="button" className="secondary"
+                                            disabled={sectionPage === 0}
+                                            onClick={() => setSectionPage((page) => page - 1)}>
+                                            Trang trước
+                                        </button>
+                                        <span>Trang {sectionPage + 1}</span>
+                                        <button type="button" className="secondary"
+                                            disabled={!sectionHasNext}
+                                            onClick={() => setSectionPage((page) => page + 1)}>
+                                            Trang sau
+                                        </button>
+                                    </nav>
+                                </>
+                            )}
                     </section>
                     <section className="panel">
                         <h2>3. Lớp đã đăng ký</h2>
@@ -159,6 +270,14 @@ ${row.course_name}`.toLowerCase().includes(keyword)
                             onCancel={(id) => changeEnrollment(id, true)} />
                     </section>
                 </div>
+            )}
+            {!loading && !error && (
+                <EnrollmentHistory rows={historyRows}
+                    loading={historyLoading}
+                    error={historyError}
+                    page={historyPage}
+                    hasNext={historyHasNext}
+                    onPageChange={setHistoryPage} />
             )}
             <footer>Số chỗ và đăng ký được đọc từ API; Backend quyết định tính hợp
                 lệ.</footer>
