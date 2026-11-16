@@ -44,4 +44,10 @@ my-react-app/src/main.jsx
 my-react-app/src/assets/hero.png
 my-react-app/src/assets/react.svg
 my-react-app/src/assets/vite.svg
-frontend/package-lock.json
+
+
+backend/.env.docker
+
+frontend/.env.local
+pytest.ini
+frontend/tests/api.test.mjs
