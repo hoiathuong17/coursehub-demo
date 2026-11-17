@@ -30,6 +30,7 @@ jobs:
           DB_USER: postgres
           DB_PASSWORD: postgres
         run: pytest backend/tests -q
+   
 
   frontend:
     runs-on: ubuntu-latest
