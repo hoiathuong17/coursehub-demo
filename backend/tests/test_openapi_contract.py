@@ -32,6 +32,8 @@ def test_enrollment_methods_are_registered():
 
     paths = app.openapi()["paths"]
 
+    assert "get" in paths["/sections"]
+
     assert "post" in paths["/enrollments"]
 
     assert "delete" in paths[
