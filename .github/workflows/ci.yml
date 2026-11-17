@@ -22,9 +22,13 @@ jobs:
         run: python -m pip install -r backend/requirements-dev.txt
       - name: Compile backend
         run: python -m compileall backend
-      - name: Prepare backend env for tests
-        run: cp backend/.env.docker.example backend/.env
       - name: Test backend contract
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: coursehub
+          DB_USER: postgres
+          DB_PASSWORD: postgres
         run: pytest backend/tests -q
 
   frontend:
