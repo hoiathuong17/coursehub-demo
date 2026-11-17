@@ -1,10 +1,12 @@
 from __future__ import annotations
 import logging
 from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError,SQLAlchemyError
 from .database import engine
 from .schemas import DemoEnrollmentCreate, EnrollmentCreate, SectionCapacityUpdate
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,23 @@ title="CourseHub API",
 version="0.3.0",
 description="API thuc hanh Buoi 3 - Co so du lieu Web va he thong thong tin",
 )
+app.add_middleware(
+CORSMiddleware,
+allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+allow_credentials=False,
+allow_methods=["GET", "POST", "DELETE"],
+allow_headers=["Content-Type"],
+)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.exception("Unhandled server exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Lỗi máy chủ nội bộ: {str(exc)}"},
+    )
+
 # ==========================================
 # BUỔI 4 - BÀI 1: API đọc lịch sử đăng ký
 # ==========================================
@@ -23,7 +42,7 @@ def list_enrollment_events(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[dict[str, object]]:
-    conditions: list[str] = []
+    conditions: list[str] = ["dataset = 'demo'"]
     parameters: dict[str, object] = {
         "limit": limit,
         "skip": skip,
@@ -117,17 +136,58 @@ def get_course(course_code: str) -> dict[str, object]:
 
 @app.get("/sections")
 def list_sections(
-    available_only: bool = False,
+    q: str | None = Query(
+        default=None,
+        max_length=100,
+        description="Từ khóa không quá 100 ký tự; tìm không phân biệt hoa thường trong mã lớp, mã học phần hoặc tên học phần.",
+    ),
+    course_code: str | None = Query(
+        default=None,
+        max_length=20,
+        description="Lọc chính xác theo mã học phần.",
+    ),
+    available_only: bool = Query(
+        default=False,
+        description="Chỉ trả về lớp còn chỗ nếu đặt true.",
+    ),
+    skip: int = Query(default=0, ge=0, description="Số dòng bỏ qua."),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Số dòng tối đa mỗi trang (1–100).",
+    ),
 ) -> list[dict[str, object]]:
-    sql = """
-        SELECT class_id, course_code, capacity, enrolled, remaining
-        FROM v_section_summary
+    """Search and paginate sections in the database.
+
+    Results use the stable order class_id ASC. Filtering, offset, and limit are
+    applied by SQL before rows are returned.
     """
+    sql = """
+        SELECT s.class_id, s.course_code, c.name AS course_name,
+               s.capacity, s.enrolled, s.remaining
+        FROM v_section_summary AS s
+        JOIN courses AS c ON c.code = s.course_code
+    """
+    conditions: list[str] = []
+    parameters: dict[str, object] = {"skip": skip, "limit": limit}
+    if q is not None and q.strip():
+        conditions.append(
+            "(LOWER(s.class_id) LIKE :keyword "
+            "OR LOWER(s.course_code) LIKE :keyword "
+            "OR LOWER(c.name) LIKE :keyword)"
+        )
+        parameters["keyword"] = f"%{q.strip().lower()}%"
+    if course_code is not None and course_code.strip():
+        conditions.append("s.course_code = :course_code")
+        parameters["course_code"] = course_code.strip().upper()
     if available_only:
-        sql += " WHERE remaining > 0"
-    sql += " ORDER BY class_id"
+        conditions.append("s.remaining > 0")
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += " ORDER BY s.class_id ASC LIMIT :limit OFFSET :skip"
     with engine.connect() as connection:
-        rows = connection.execute(text(sql)).mappings().all()
+        rows = connection.execute(text(sql), parameters).mappings().all()
     return [dict(row) for row in rows]
 
 @app.get("/students/{student_id}/enrollments")
@@ -269,7 +329,7 @@ def list_enrollment_events(
     skip: int = Query(default=0, ge=0, description="Số bản ghi bỏ qua"),
     limit: int = Query(default=20, ge=1, le=100, description="Giới hạn số bản ghi từ 1 đến 100"),
 ) -> list[dict[str, object]]:
-    conditions: list[str] = []
+    conditions: list[str] = ["dataset = 'demo'"]
     parameters: dict[str, object] = {"skip": skip, "limit": limit}
 
     if student_id is not None:
@@ -407,6 +467,7 @@ def create_enrollment(payload: EnrollmentCreate) -> dict[str, str]:
 
     try:
         with engine.begin() as connection:
+            connection.execute(text("SET LOCAL lock_timeout = '3s'"))
             student = connection.execute(
                 text(student_sql),
                 {"student_id": payload.student_id},
@@ -454,10 +515,18 @@ def create_enrollment(payload: EnrollmentCreate) -> dict[str, str]:
             connection.execute(text(insert_sql), parameters)
             connection.execute(text(event_sql), parameters)
 
+    except HTTPException:
+        raise
     except IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Dang ky xung dot voi du lieu hien tai",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Loi khi dang ky hoc phan")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Loi xu ly dang ky: {str(exc)}",
         ) from exc
 
     return {
@@ -499,30 +568,40 @@ def delete_enrollment(
         "class_section_id": class_section_id,
     }
 
-    with engine.begin() as connection:
-        section = connection.execute(
-            text(lock_section_sql),
-            {"class_section_id": class_section_id},
-        ).first()
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("SET LOCAL lock_timeout = '3s'"))
+            section = connection.execute(
+                text(lock_section_sql),
+                {"class_section_id": class_section_id},
+            ).first()
 
-        if section is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Khong tim thay lop hoc phan",
-            )
+            if section is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Khong tim thay lop hoc phan",
+                )
 
-        deleted = connection.execute(
-            text(delete_sql),
-            parameters,
-        ).first()
+            deleted = connection.execute(
+                text(delete_sql),
+                parameters,
+            ).first()
 
-        if deleted is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Khong tim thay dang ky can huy",
-            )
+            if deleted is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Khong tim thay dang ky can huy",
+                )
 
-        connection.execute(text(event_sql), parameters)
+            connection.execute(text(event_sql), parameters)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Loi khi huy dang ky hoc phan")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Loi xu ly huy dang ky: {str(exc)}",
+        ) from exc
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -537,7 +616,7 @@ def list_enrollment_events(
     skip: int = Query(default=0, ge=0, description="Số bản ghi bỏ qua"),
     limit: int = Query(default=20, ge=1, le=100, description="Giới hạn số bản ghi từ 1 đến 100"),
 ) -> list[dict[str, object]]:
-    conditions: list[str] = []
+    conditions: list[str] = ["dataset = 'demo'"]
     parameters: dict[str, object] = {"skip": skip, "limit": limit}
 
     if student_id is not None:

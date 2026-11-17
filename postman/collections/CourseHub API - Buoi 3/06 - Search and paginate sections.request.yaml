@@ -1,0 +1,29 @@
+$kind: http-request
+url: "{{base_url}}/sections?q=INT2204&course_code=INT2204&available_only=false&skip=0&limit=20"
+method: GET
+queryParams:
+  q: INT2204
+  course_code: INT2204
+  available_only: "false"
+  skip: "0"
+  limit: "20"
+scripts:
+  - type: afterResponse
+    code: |
+      pm.test("Status code is 200", () => {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response does not exceed requested page size", () => {
+          pm.expect(pm.response.json().length).to.be.at.most(20);
+      });
+      pm.test("All rows match the course code", () => {
+          pm.response.json().forEach((row) => {
+              pm.expect(row.course_code).to.eql("INT2204");
+          });
+      });
+      pm.test("Rows have stable class_id ascending order", () => {
+          const ids = pm.response.json().map((row) => row.class_id);
+          pm.expect(ids).to.eql([...ids].sort());
+      });
+    language: text/javascript
+order: 6000
