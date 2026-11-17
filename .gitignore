@@ -49,5 +49,5 @@ my-react-app/src/assets/vite.svg
 backend/.env.docker
 
 frontend/.env.local
-pytest.ini
+
 
