@@ -50,4 +50,4 @@ backend/.env.docker
 
 frontend/.env.local
 pytest.ini
-frontend/tests/api.test.mjs
+
